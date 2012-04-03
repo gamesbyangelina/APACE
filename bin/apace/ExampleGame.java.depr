@@ -1,0 +1,229 @@
+package apace;
+
+import org.newdawn.slick.Animation;
+import org.newdawn.slick.AppGameContainer;
+import org.newdawn.slick.Image;
+import org.newdawn.slick.SlickException;
+import org.newdawn.slick.SpriteSheet;
+
+import apace.model.Hotspot;
+import apace.model.Item;
+import apace.model.Location;
+import apace.model.cast.CastManager;
+import apace.model.cast.Character.ANIMTYPE;
+import apace.model.cast.Character.DIR;
+import apace.model.cast.NPC;
+import apace.model.cast.PlayerCharacter;
+import apace.model.conversation.ConversationManager;
+import apace.model.conversation.ConversationNode;
+import apace.model.script.CharacterLoseItemEvent;
+import apace.model.script.CharacterSayEvent;
+import apace.model.script.CharacterWalkToEvent;
+import apace.model.script.ConversationStartEvent;
+import apace.model.script.DisableConversationOptionEvent;
+import apace.model.script.PlayerGainItemEvent;
+import apace.model.script.PlayerGoToRoomEvent;
+import apace.model.script.ScriptedSequence;
+import apace.model.world.WalkableArea;
+
+public class ExampleGame extends PACGame{
+
+	public ExampleGame(String title) {
+		super(title);
+	}
+
+	public static void main(String[] args) throws SlickException
+	{
+		AppGameContainer app = 
+			new AppGameContainer(new ExampleGame("APACE Adventures"));
+		
+		app.setDisplayMode(640, 480, false);
+		app.setVSync(true);
+		app.setShowFPS(false);
+		app.setFullscreen(false);
+		
+		app.start();
+	}
+	
+	@Override
+	public void setupGameData() {
+		try{
+			Location l = createTestLocation(0);
+			locationList.put(0, l);
+			Location l2 = createTestLocation(1);
+			locationList.put(1, l2);
+			currentLocation = l;
+			PlayerCharacter pc = (createTestPC());
+			
+			SpriteSheet spritesheet = new SpriteSheet(new Image("resources/lofi_obj.png"), 32, 32);
+			Item skull = new Item("A skull", "I knew him adequately.", spritesheet.getSubImage(1, 1));
+			pc.addItem(skull);
+			Item coins = new Item("Some coins", "Oooh. Conspicuous.", spritesheet.getSubImage(0,0));
+			pc.addItem(coins);
+			Item chest = new Item("A small chest", "Perfect for storin' stuff.", spritesheet.getSubImage(1, 0));
+			ScriptedSequence putSkullInside = new ScriptedSequence().add(new CharacterLoseItemEvent()).add(new CharacterSayEvent("Done! Not sure why."));
+			chest.addItemEffect(skull, putSkullInside);
+			pc.addItem(chest);
+			
+			setPlayerCharacter(pc);
+			setLookTriggersWalkTo(true);
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
+	}
+	
+	/*
+	 * Creates a player character with 'animations'
+	 */
+	private PlayerCharacter createTestPC() throws SlickException {
+		PlayerCharacter pc = new PlayerCharacter(200, 200, 16, 32);
+		
+		//Sprite sheet with 32x32 sprites.
+		SpriteSheet ss = new SpriteSheet(new Image("resources/lofi_char.png"), 32,32);
+		//Single-frame walking animations for all four directions.
+		Animation right = new Animation(false);
+		right.addFrame(ss.getSubImage(4, 29), 150);
+		Animation left = new Animation(false);
+		left.addFrame(ss.getSubImage(6, 29), 150);
+		Animation down = new Animation(false);
+		down.addFrame(ss.getSubImage(5, 29), 150);
+		Animation up = new Animation(false);
+		up.addFrame(ss.getSubImage(7, 29), 150);
+		pc.addAnimation(ANIMTYPE.WALKING, right, left, up, down);
+		pc.addAnimation(ANIMTYPE.STANDING, right, left, up, down);
+		
+		pc.setCurrentAnimation(ANIMTYPE.STANDING);
+		return pc;
+	}
+	
+	private Location createTestLocation(int roomnum) throws SlickException {
+		if(roomnum == 0){
+			//Define the walkable area.
+			WalkableArea walk = new WalkableArea(640, 480, 32);
+			walk.makeWalkable(96,96, 480, 320);
+			walk.makeBlocked(300, 263, 96, 32);
+			walk.makeBlocked(337, 235, 32, 32);
+			walk.makeBlocked(104,104,32,32);
+			Location l = new Location("Starter Location", new Image("resources/room1.png"), walk);
+			
+			//Define a hotspot, in this case for the door.
+			Hotspot door = new Hotspot("Door", 7*32, 2*32, 32, 32);
+			door.setWalkTo((int) door.area.getCenterX(), (int )door.area.getMaxY());
+			//Add an examine event for the door.
+			ScriptedSequence examineDoor = new ScriptedSequence();
+			examineDoor.add(new CharacterSayEvent("It's a metal door."));
+			examineDoor.add(new CharacterSayEvent("Fascinating."));
+			door.setExamine(examineDoor);
+			//And a use sequence, which switches rooms.
+			ScriptedSequence useDoor = new ScriptedSequence()
+			.add(new CharacterWalkToEvent(door.walktox, door.walktoy, 0))
+			.add(new CharacterSayEvent("Well, here I go!"))
+			.add(new PlayerGoToRoomEvent(1));
+			door.setUse(useDoor);
+			
+			door.enabled = true;
+			l.hotspots.add(door);
+			
+			Hotspot chest = new Hotspot("Chest", 17*32, 3*32, 32, 32, 16*32, 4*32);
+			ScriptedSequence examineChest = new ScriptedSequence().add(new CharacterSayEvent("A chest!")).add(new CharacterSayEvent("Wonder what's inside."));
+			chest.setExamine(examineChest);
+			
+			ScriptedSequence useChest = new ScriptedSequence(new CharacterSayEvent("Huh. Locked."));
+			chest.setUse(useChest);
+			
+			ScriptedSequence useKey = new ScriptedSequence()
+			.add(new CharacterSayEvent("It worked! There's something in here."))
+			.add(new CharacterSayEvent("Yoink."));
+			SpriteSheet spritesheet = new SpriteSheet(new Image("resources/lofi_obj.png"), 32, 32);
+			
+			Item gem = new Item("A shiny", "Oooh. Shiny.", spritesheet.getSprite(3, 0));
+			useKey.add(new PlayerGainItemEvent(gem));
+			chest.addItemEffect(new Item("A key", "", null), useKey);
+			chest.enabled = true;
+			l.hotspots.add(chest);
+			
+			return l;
+		}
+		else{
+			WalkableArea walk = new WalkableArea(640, 480, 32);
+			walk.makeWalkable(96, 96, 480, 320);
+			Location l = new Location("Starter Location 2", new Image("resources/room2.png"), walk);
+			
+			//Define a hotspot, in this case for the door.
+			Hotspot door = new Hotspot("Door", 7*32, 2*32, 32, 32);
+			//Add an examine event for the door.
+			ScriptedSequence examineDoor = new ScriptedSequence();
+			examineDoor.add(new CharacterSayEvent("It's a metal door."));
+			examineDoor.add(new CharacterSayEvent("Just, uh, from the other side."));
+			examineDoor.add(new CharacterSayEvent("Compelling stuff."));
+			door.setExamine(examineDoor);
+			//And a use sequence, which switches rooms.
+			ScriptedSequence useDoor = new ScriptedSequence();
+			useDoor.add(new CharacterSayEvent("Well, here I go!"));
+			useDoor.add(new PlayerGoToRoomEvent(0));
+			door.setUse(useDoor);
+			door.enabled = true;
+			l.hotspots.add(door);
+			
+			NPC npc = CastManager.newNPC("c_Mike", "Mike", 200, 200, 16, 32);
+			
+			SpriteSheet ss = new SpriteSheet(new Image("resources/lofi_char.png"), 32,32);
+			
+			Animation right = new Animation(false);
+			right.addFrame(ss.getSubImage(4, 30), 150);
+			Animation left = new Animation(false);
+			left.addFrame(ss.getSubImage(6, 30), 150);
+			Animation down = new Animation(false);
+			down.addFrame(ss.getSubImage(5, 30), 150);
+			Animation up = new Animation(false);
+			up.addFrame(ss.getSubImage(7, 30), 150);
+			
+			npc.addAnimation(ANIMTYPE.WALKING, right, left, up, down);
+			npc.addAnimation(ANIMTYPE.STANDING, right, left, up, down);
+			npc.setCurrentAnimation(ANIMTYPE.STANDING);
+			npc.currentDirection = DIR.RIGHT;
+			
+			ScriptedSequence examineNPC = new ScriptedSequence();
+			CharacterSayEvent cse = new CharacterSayEvent("It's an odd-looking NPC");
+			CharacterSayEvent npcreply = new CharacterSayEvent("Same to you, buddy.", npc.code);
+			examineNPC.add(cse).add(npcreply);
+			npc.examine = examineNPC;
+			
+			ScriptedSequence talkToNPC = new ScriptedSequence()
+			.add(new CharacterSayEvent("Hey there, you!"))
+			.add(new CharacterSayEvent("What is it now.", npc.code))
+			.add(new ConversationStartEvent(0));
+			npc.talkTo = talkToNPC;
+			
+			ConversationNode npc1_root = ConversationManager.newNode();
+			ScriptedSequence nothingmuch = new ScriptedSequence()
+			.add(new CharacterSayEvent("So, how's tricks?"))
+			.add(new CharacterSayEvent("They're fantastic.", npc.code))
+			.add(new CharacterSayEvent("I'm overwhelmed with positive emotion.", npc.code))
+			.add(new ConversationStartEvent(0));
+			
+			npc1_root.addOption("So, how's tricks?", nothingmuch);
+			
+			SpriteSheet spritesheet = new SpriteSheet(new Image("resources/lofi_obj.png"), 32, 32);
+			Item key = new Item("A key", "It's a rusty key.", spritesheet.getSprite(0, 2));
+			ScriptedSequence givekey = new ScriptedSequence();
+			givekey.add(new CharacterSayEvent("Hey, do you have a key?"))
+			.add(new CharacterSayEvent("For you, sir? Anything.", npc.code))
+			.add(new CharacterSayEvent("Especially if it'll get you out of my sight.", npc.code))
+			.add(new CharacterSayEvent("Nice."))
+			.add(new PlayerGainItemEvent(key))
+			.add(new DisableConversationOptionEvent(npc1_root.conversationId, "Hey, do you have a key?"))
+			.add(new ConversationStartEvent(0));
+			npc1_root.addOption("Hey, do you have a key?", givekey);
+			
+			ScriptedSequence goodbye = new ScriptedSequence(new CharacterSayEvent("Goodbye!"));
+			npc1_root.addOption("Goodbye!", goodbye);
+			
+			l.npcs.add(npc);
+			
+			return l;
+		}
+	}
+
+}

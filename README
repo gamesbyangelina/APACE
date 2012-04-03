@@ -1,0 +1,9 @@
+APACE - A Point And Click Engine (in Java, with Slick2D)
+
+APACE is a work-in-progress game library for creating point-and-click adventures programatically through Java. It doesn't have a GUI, so if you're a human looking to make point-and-click adventures I'd recommend you take a look at the excellent, fully-functional Adventure Game Studio. Off you go.
+
+What APACE *might* be useful for, though, is if you're interested in generating adventure games procedurally. Which I might be in the future. Hence this library, and hence me putting it on github - in case you want to have a crack too.
+
+APACE requires Slick2D and the LWJGL to run. It's in a very early version right now and is missing a lot of core functionality, so we're not really even in what might be considered a 'beta' (even in the pre-Minecraft nomenclature). I'm mostly putting this online so I have a reason to edit and update it, which I'll do so when I get time (it's not a part of my core work).
+
+For more info on APACE and other things I do, check out http://www.gamesbyangelina.org
